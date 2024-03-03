@@ -3,7 +3,7 @@ Hi! This is our CSC 380 project 1 submission. This project was worked on by Jawa
 
 #### In this Project, we aim to achieve
 
-* RSA
-* SKE (only on buffers)
-* SKE that works on files
-* KEM 
+* RSA encryption
+* SKE encryption (only on buffers)
+* SKE encryption (that works on files)
+* KEM encryption
