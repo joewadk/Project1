@@ -9,8 +9,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <unistd.h>
-#include <sys/mman.h>
+
 #ifdef LINUX
 #define MMAP_SEQ MAP_PRIVATE|MAP_POPULATE
 #else

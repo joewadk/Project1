@@ -3,5 +3,25 @@
         "activityBar.background": "#432339",
         "titleBar.activeBackground": "#5D3150",
         "titleBar.activeForeground": "#FCF9FB"
+    },
+    "files.associations": {
+        "stdio.h": "c",
+        "aes.h": "c",
+        "sha.h": "c",
+        "prf.h": "c",
+        "ske.h": "c",
+        "inttypes.h": "c",
+        "macros.h": "c",
+        "opensslconf.h": "c",
+        "stddef.h": "c",
+        "fcntl.h": "c",
+        "stat.h": "c",
+        "evp.h": "c",
+        "hmac.h": "c",
+        "stdlib.h": "c",
+        "errno.h": "c",
+        "rsa.h": "c",
+        "gmp.h": "c",
+        "string.h": "c"
     }
 }
