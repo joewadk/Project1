@@ -35,6 +35,29 @@ int ske_keyGen(SKE_KEY* K, unsigned char* entropy, size_t entLen)
 	/* TODO: write this.  If entropy is given, apply a KDF to it to get
 	 * the keys (something like HMAC-SHA512 with KDF_KEY will work).
 	 * If entropy is null, just get a random key (you can use the PRF). */
+	if(entropy == NULL)
+        {
+                // generate random aesKey and hmacKey
+                // half of buff array corresponds to HMAC key
+                // the other half corresponds to AES key
+                unsigned char* buff = malloc(64); 
+                randBytes(buff, 64);               
+                memcpy((*K).aesKey, buff, 32); 
+                memcpy((*K).hmacKey, buff + 32, 32); 
+                free(buff);
+        }
+        else
+        {
+                // get 512-bit authentication code of entropy with KDF_KEY
+		unsigned char* keys = malloc(64);
+                HMAC(EVP_sha512(), &KDF_KEY, 32, entropy, entLen, keys, NULL); 
+                // half of keys array corresponds to HMAC key
+                // the other half corresponds to AES key
+                memcpy((*K).aesKey, keys, 32); 
+                memcpy((*K).hmacKey, keys + 32, 32);
+                free(keys);
+        }
+
 	return 0;
 }
 size_t ske_getOutputLen(size_t inputLen)

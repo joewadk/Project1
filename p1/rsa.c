@@ -3,7 +3,8 @@
 #include <string.h>
 #include "rsa.h"
 #include "prf.h"
-#include gmp.h>
+#include <gmp.h>
+#include <stdbool.h>
 
 /* NOTE: a random composite surviving 10 Miller-Rabin tests is extremely
  * unlikely.  See Pomerance et al.:
@@ -60,88 +61,64 @@ int rsa_keyGen(size_t keyBits, RSA_KEY* K)
 	 * pieces of the key ({en,de}crypting exponents, and n=pq). */
 	 
 	 
-	// initializing the primes p and q, euler's totient, and the gcd (will be assigned later) that determines if e and the totient are coprime
-	mpz_t p, q, phi, gcd;
-    	mpz_inits(p, q, phi, gcd, NULL); 
-	 
-	// we make members of K that will be modified later
-	
-    	mpz_init(K->n);
-    	mpz_init(K->e);
-    	mpz_init(K->d);
-	
-	
-	//we use a common RSA param 65537 as e for computational security 
-	mpz_set_ui(K->e, 65537);
-	
-	
-	//random long integer generation
-	gmp_randstate_t r_state;
-    	gmp_randinit_default(r_state);
-    	gmp_randseed_ui(r_state, (unsigned long)time(NULL));
-    	
-    	// this should generate prime long integers p and q
-	while (true) {
-       		while (!ISPRIME(p)){
-            		generate_random_prime(p, keyBits / 2, r_state); } 
-		while (!ISPRIME(q) || mpz_cmp(p, q) == 0){  	//check if q is prime while also ensuring p and q are distinct
-            		generate_random_prime(q, keyBits / 2, r_state); } 
-            		
-       		// Calculate n (product of p and q) and phi (product of p-1 and q-1)
-		mpz_mul(K->n, p, q);  
-		mpz_sub_ui(phi, p, 1);
-		mpz_sub_ui(gcd, q, 1);
-		mpz_mul(phi, phi, gcd);
+	mpz_t phi, temp1, temp2;
+        mpz_inits(phi, temp1, temp2, NULL);	
+        size_t factorBytes = keyBits / 16;		
+        unsigned char* buf = malloc(factorBytes);
 
-		mpz_gcd(gcd, K->e, phi);
-		if (mpz_cmp_ui(gcd, 1) == 0) {  //mpz_cmp only compares two mpz_t type integers, by using mpz_cmp_ui we can compare mpz_t type integers with long integers
-		    break; //by doing gcd, we check if we do in fact have prime values (the gcd should only have factors with 1 and itself) and if not it continues looping
-		    }
-		// Compute the modular inverse d = e^-1 mod φ(n)
-	    	if (mpz_invert(K->d, K->e, phi) == 0) {
-			mpz_clears(K->n, K->e, K->d, K->p, K->q, phi, gcd, NULL);
-			gmp_randclear(r_state);
-	       		return -1; // Return failure
-	    		}
-	    		break; //termination step - p and q were found to be prime
-	    }
-	mpz_clears(p, q, phi, gcd, NULL);  //ensure no memory leaks occur in successive calls
-    	gmp_randclear(r_state);  //clear the rand integer
+        // generate p 
+        randBytes(buf, factorBytes);
+        BYTES2Z(temp1, buf, factorBytes);	
+	if(ISPRIME(temp1) != 2)
+	        mpz_nextprime(temp1, temp1);
+	mpz_set((*K).p, temp1);
+	
+	// generate q
+	randBytes(buf, factorBytes);
+        BYTES2Z(temp2, buf, factorBytes);	
+	if(ISPRIME(temp2) != 2)
+	        mpz_nextprime(temp2, temp2);
+	mpz_set((*K).q, temp2);
+
+	// compute n
+	mpz_mul((*K).n, temp1, temp2);
+
+	// generate e
+        mpz_sub_ui(temp1, temp1, 1);
+        mpz_sub_ui(temp2, temp2, 1);
+        mpz_mul(phi, temp1, temp2);
+        mpz_set_ui(temp1, 1);
+        do
+	{
+	        mpz_add_ui(temp1, temp1, 1);
+                mpz_gcd(temp2, phi, temp1);
+	} while(mpz_cmp_ui(temp2, 1) != 0);		
+	mpz_set((*K).e, temp1);
+
+	// compute d
+	mpz_invert((*K).d, temp1, phi);
+
+	free(buf);
+        mpz_clears(phi, temp1, temp2, NULL);	
+
 	return 0;
 }
 
 size_t rsa_encrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
 		RSA_KEY* K)
 {
-	    /* TODO: write this.  Use BYTES2Z to get integers, and then
-	    * Z2BYTES to write the output buffer. */	
-	
-	    mpz_t msg;
-	    mpz_init(msg);
-	    mpz_import(msg, len, 1, sizeof(unsigned char), 0, 0, inBuf);
+	/* TODO: write this.  Use BYTES2Z to get integers, and then
+	 * Z2BYTES to write the output buffer. */
+        size_t bw;
+	mpz_t ct, pt;
+	mpz_inits(ct, pt, NULL);
+        BYTES2Z(pt, inBuf, len);
+	mpz_powm(ct, pt, (*K).e, (*K).n);
+	Z2BYTES(outBuf, bw, ct);
+	mpz_clears(ct, pt, NULL);
+	return bw; /* TODO: return should be # bytes written */
+}
 
-	    // Ensure the message is smaller than the modulus
-	    if (mpz_cmp(msg, K->n) >= 0) {
-		mpz_clear(msg);
-		return 0;  
-	    }
-
-	    // Encrypt the message: C = m^e mod n
-	    mpz_t encrypted;
-	    mpz_init(encrypted);
-	    mpz_powm(encrypted, msg, K->e, K->n);  // Encrypt the message
-
-	    // Export the result back to bytes
-	    size_t count = 0;
-	    mpz_export(outBuf, &count, 1, sizeof(unsigned char), 0, 0, encrypted);  // Export mpz to byte array
-
-	    // Clear the memory for future calls
-	    mpz_clear(msg);
-	    mpz_clear(encrypted);
-
-	    return count; /* TODO: return should be # bytes written */
-	} 
-	 
 size_t rsa_decrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
 		RSA_KEY* K)
 {
