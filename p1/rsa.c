@@ -3,7 +3,8 @@
 #include <string.h>
 #include "rsa.h"
 #include "prf.h"
-#include gmp.h>
+#include <gmp.h>
+#include <time.h>
 
 /* NOTE: a random composite surviving 10 Miller-Rabin tests is extremely
  * unlikely.  See Pomerance et al.:
@@ -19,7 +20,7 @@ int zToFile(FILE* f, mpz_t x)
 {
 	size_t i,len = mpz_size(x)*sizeof(mp_limb_t);
 	/* NOTE: len may overestimate the number of bytes actually required. */
-	unsigned char* buf = malloc(len);
+	unsigned char* buf = (unsigned char*)malloc(len);
 	Z2BYTES(buf,len,x);
 	/* force little endian-ness: */
 	for (i = 0; i < 8; i++) {
@@ -42,7 +43,7 @@ int zFromFile(FILE* f, mpz_t x)
 		fread(&b,1,1,f);
 		len += (b << 8*i);
 	}
-	unsigned char* buf = malloc(len);
+	unsigned char* buf = (unsigned char*)malloc(len);
 	fread(buf,1,len,f);
 	BYTES2Z(x,buf,len);
 	/* kill copy in buffer, in case this was sensitive: */
@@ -58,57 +59,69 @@ int rsa_keyGen(size_t keyBits, RSA_KEY* K)
 	 * the right length, and then test for primality (see the ISPRIME
 	 * macro above).  Once you've found the primes, set up the other
 	 * pieces of the key ({en,de}crypting exponents, and n=pq). */
-	 
-	 
+
 	// initializing the primes p and q, euler's totient, and the gcd (will be assigned later) that determines if e and the totient are coprime
 	mpz_t p, q, phi, gcd;
-    	mpz_inits(p, q, phi, gcd, NULL); 
-	 
-	// we make members of K that will be modified later
-	
-    	mpz_init(K->n);
-    	mpz_init(K->e);
-    	mpz_init(K->d);
-	
-	
-	//we use a common RSA param 65537 as e for computational security 
+	mpz_inits(p, q, phi, gcd, NULL);
+
+	// Initialize members of K for use
+	mpz_init(K->n);
+	mpz_init(K->e);
+	mpz_init(K->d);
+
+	// Common RSA parameter 65537 used as e for simplicity and security
 	mpz_set_ui(K->e, 65537);
-	
-	
-	//random long integer generation
+
+	// Setting up the random state for prime number generation
 	gmp_randstate_t r_state;
-    	gmp_randinit_default(r_state);
-    	gmp_randseed_ui(r_state, (unsigned long)time(NULL));
-    	
-    	// this should generate prime long integers p and q
-	while (true) {
-       		while (!ISPRIME(p)){
-            		generate_random_prime(p, keyBits / 2, r_state); } 
-		while (!ISPRIME(q) || mpz_cmp(p, q) == 0){  	//check if q is prime while also ensuring p and q are distinct
-            		generate_random_prime(q, keyBits / 2, r_state); } 
-            		
-       		// Calculate n (product of p and q) and phi (product of p-1 and q-1)
-		mpz_mul(K->n, p, q);  
+	gmp_randinit_default(r_state);
+	gmp_randseed_ui(r_state, (unsigned long)time(NULL));
+
+	// The flag to indicate if suitable primes have been found
+	int primes_found = 0;
+	while (!primes_found) {
+		// Generate prime p
+		while (1) {
+		    mpz_urandomb(p, r_state, keyBits / 2); // Generate a random number of keyBits/2 length
+		    mpz_setbit(p, keyBits / 2 - 1);       // Ensure it is of the correct length
+		    mpz_nextprime(p, p);                  // Get the next prime starting from p
+		    if (ISPRIME(p)) {
+		        break;  // Exit loop if p is a prime
+		    }
+		}
+
+		// Generate prime q, distinct from p
+		while (1) {
+		    mpz_urandomb(q, r_state, keyBits / 2);
+		    mpz_setbit(q, keyBits / 2 - 1);
+		    mpz_nextprime(q, q);  // Ensure q is a prime number
+		    if (mpz_cmp(p, q) != 0 && ISPRIME(q)) {
+		        break;  // Exit loop if q is a prime and distinct from p
+		    }
+		}
+
+		// Calculate n (product of p and q) and phi (product of p-1 and q-1)
+		mpz_mul(K->n, p, q);  // n = p * q
 		mpz_sub_ui(phi, p, 1);
 		mpz_sub_ui(gcd, q, 1);
-		mpz_mul(phi, phi, gcd);
+		mpz_mul(phi, phi, gcd);  // phi = (p-1)*(q-1)
 
+		// Check if e and phi are coprime
 		mpz_gcd(gcd, K->e, phi);
-		if (mpz_cmp_ui(gcd, 1) == 0) {  //mpz_cmp only compares two mpz_t type integers, by using mpz_cmp_ui we can compare mpz_t type integers with long integers
-		    break; //by doing gcd, we check if we do in fact have prime values (the gcd should only have factors with 1 and itself) and if not it continues looping
+		if (mpz_cmp_ui(gcd, 1) == 0) {
+		    // Compute the modular inverse d = e^-1 mod φ(n)
+		    if (mpz_invert(K->d, K->e, phi) != 0) {
+		        primes_found = 1; // Indicate that suitable primes have been found
 		    }
-		// Compute the modular inverse d = e^-1 mod φ(n)
-	    	if (mpz_invert(K->d, K->e, phi) == 0) {
-			mpz_clears(K->n, K->e, K->d, K->p, K->q, phi, gcd, NULL);
-			gmp_randclear(r_state);
-	       		return -1; // Return failure
-	    		}
-	    		break; //termination step - p and q were found to be prime
+		}
 	    }
-	mpz_clears(p, q, phi, gcd, NULL);  //ensure no memory leaks occur in successive calls
-    	gmp_randclear(r_state);  //clear the rand integer
-	return 0;
-}
+
+	    // Cleanup and free allocated memory
+	    mpz_clears(p, q, phi, gcd, NULL);
+	    gmp_randclear(r_state);
+	    return 0; // Success
+	}
+
 
 size_t rsa_encrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
 		RSA_KEY* K)
