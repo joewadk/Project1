@@ -7,3 +7,6 @@ Hi! This is our CSC 380 project 1 submission. This project was worked on by Jawa
 * SKE encryption (only on buffers)
 * SKE encryption (that works on files)
 * KEM encryption
+
+### Make sure to run: 
+<code> ./kem-enc -b 2048 -g /tmp/testkey </code>
