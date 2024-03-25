@@ -1,3 +1,4 @@
+
 /*Worked on by: Shamia Shanaha and Anthony Zhu */
 
 /* kem-enc.c
@@ -183,12 +184,8 @@ int main(int argc, char *argv[]) {
             
             keyFile = fopen(fnKey, "rb");
             rsa_readPublic(keyFile, &K);
-            fclose(keyFile);
-
-            
+            fclose(keyFile); 
             kem_encrypt(fnOut, fnIn, &K);
-
-           
             rsa_shredKey(&K);
             break;
 
@@ -197,19 +194,15 @@ int main(int argc, char *argv[]) {
             keyFile = fopen(fnKey, "rb");
             rsa_readPrivate(keyFile, &K);
             fclose(keyFile);
-
             
             kem_decrypt(fnOut, fnIn, &K);
 
-            
             rsa_shredKey(&K);
             break;
 
         case GEN:
             
             rsa_keyGen(nBits, &K);
-
-           
             keyFile = fopen(fnOut, "wb");
              rsa_writePublic(keyFile, &K);
             fclose(keyFile);
@@ -221,7 +214,6 @@ int main(int argc, char *argv[]) {
             rsa_writePrivate(keyFile, &K);
             fclose(keyFile);
 
-            
             rsa_shredKey(&K);
             break;
 
