@@ -1,3 +1,5 @@
+/*Worked on by: Shamia Shanaha and Anthony Zhu */
+
 /* kem-enc.c
  * simple encryption utility providing CCA2 security.
  * based on the KEM/DEM hybrid model. */
@@ -52,24 +54,59 @@ enum modes {
 
 #define HASHLEN 32 /* for sha256 */
 
+	 
 int kem_encrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
 {
-	/* TODO: encapsulate random symmetric key (SK) using RSA and SHA256;
-	 * encrypt fnIn with SK; concatenate encapsulation and cihpertext;
-	 * write to fnOut. */
-	return 0;
+    /* TODO: encapsulate random symmetric key (SK) using RSA and SHA256;
+     * encrypt fnIn with SK; concatenate encapsulation and cihpertext;
+     * write to fnOut. */
+
+    
+    SKE_KEY SK;
+    unsigned char entropy[KLEN_SKE];
+    randBytes(entropy, sizeof(entropy));
+    ske_keyGen(&SK, entropy, sizeof(entropy));
+ 
+    
+    unsigned char encrypted[rsa_numBytesN(K)];
+    rsa_encrypt(encrypted, (unsigned char*)&SK, sizeof(SK), K);
+
+   
+    unsigned char IV[AES_BLOCK_SIZE];
+    randBytes(IV, sizeof(IV));
+    ske_encrypt_file(fnOut, fnIn, &SK, IV, sizeof(encrypted));
+
+    
+    FILE *file = fopen(fnOut, "rb+");
+    if (file != NULL) {
+        fseek(file, 0, SEEK_SET);
+        fwrite(encrypted, sizeof(encrypted), 1, file);
+        fclose(file);
+    }
+ 
+
+    return 0;
 }
 
-/* NOTE: make sure you check the decapsulation is valid before continuing */
 int kem_decrypt(const char* fnOut, const char* fnIn, RSA_KEY* K)
 {
 	/* TODO: write this. */
 	/* step 1: recover the symmetric key */
 	/* step 2: check decapsulation */
 	/* step 3: derive key from ephemKey and decrypt data. */
-	return 0;
-}
 
+    unsigned char encrypted[rsa_numBytesN(K)];
+    FILE *file = fopen(fnIn, "rb");
+    if (file != NULL) {
+        fread(encrypted, sizeof(encrypted), 1, file);
+        fclose(file);
+    }
+    SKE_KEY SK;
+    rsa_decrypt((unsigned char*)&SK, encrypted, sizeof(encrypted), K);
+    ske_decrypt_file(fnOut, fnIn, &SK, sizeof(encrypted));
+
+    return 0;
+}
 int main(int argc, char *argv[]) {
 	/* define long options */
 	static struct option long_opts[] = {
@@ -133,17 +170,65 @@ int main(int argc, char *argv[]) {
 				return 1;
 		}
 	}
+	
+
 
 	/* TODO: finish this off.  Be sure to erase sensitive data
 	 * like private keys when you're done with them (see the
 	 * rsa_shredKey function). */
-	switch (mode) {
-		case ENC:
-		case DEC:
-		case GEN:
-		default:
-			return 1;
-	}
+    RSA_KEY K;
+    FILE *keyFile;
+    switch (mode) {
+        case ENC:
+            
+            keyFile = fopen(fnKey, "rb");
+            rsa_readPublic(keyFile, &K);
+            fclose(keyFile);
 
-	return 0;
+            
+            kem_encrypt(fnOut, fnIn, &K);
+
+           
+            rsa_shredKey(&K);
+            break;
+
+        case DEC:
+            
+            keyFile = fopen(fnKey, "rb");
+            rsa_readPrivate(keyFile, &K);
+            fclose(keyFile);
+
+            
+            kem_decrypt(fnOut, fnIn, &K);
+
+            
+            rsa_shredKey(&K);
+            break;
+
+        case GEN:
+            
+            rsa_keyGen(nBits, &K);
+
+           
+            keyFile = fopen(fnOut, "wb");
+             rsa_writePublic(keyFile, &K);
+            fclose(keyFile);
+
+            char fnOutPriv[FNLEN+5];
+            strncpy(fnOutPriv, fnOut, FNLEN);
+            strncat(fnOutPriv, ".priv", 5);
+            keyFile = fopen(fnOutPriv, "wb");
+            rsa_writePrivate(keyFile, &K);
+            fclose(keyFile);
+
+            
+            rsa_shredKey(&K);
+            break;
+
+        default:
+            printf("Invalid mode\n");
+            return 1;
+    }
+
+    return 0;
 }
