@@ -19,10 +19,9 @@
 int zToFile(FILE* f, mpz_t x)
 {
 	size_t i,len = mpz_size(x)*sizeof(mp_limb_t);
-	/* NOTE: len may overestimate the number of bytes actually required. */
 	unsigned char* buf = (unsigned char*)malloc(len);
 	Z2BYTES(buf,len,x);
-	/* force little endian-ness: */
+
 	for (i = 0; i < 8; i++) {
 		unsigned char b = (len >> 8*i) % 256;
 		fwrite(&b,1,1,f);
@@ -131,28 +130,17 @@ size_t rsa_encrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
 	
 	    mpz_t msg;
 	    mpz_init(msg);
-	    mpz_import(msg, len, 1, sizeof(unsigned char), 0, 0, inBuf);
+	    BYTES2Z(msg, inBuf, len);
 
-	    // Ensure the message is smaller than the modulus
-	    if (mpz_cmp(msg, K->n) >= 0) {
-		mpz_clear(msg);
-		return 0;  
-	    }
-
+	    
 	    // Encrypt the message: C = m^e mod n
 	    mpz_t encrypted;
 	    mpz_init(encrypted);
 	    mpz_powm(encrypted, msg, K->e, K->n);  // Encrypt the message
 
 	    // Export the result back to bytes
-	    size_t count = 0;
-	    mpz_export(outBuf, &count, 1, sizeof(unsigned char), 0, 0, encrypted);  // Export mpz to byte array
-
-	    // Clear the memory for future calls
-	    mpz_clear(msg);
-	    mpz_clear(encrypted);
-
-	    return count; /* TODO: return should be # bytes written */
+	    Z2BYTES(outBuf, len, encrypted);
+	    return len; /* TODO: return should be # bytes written */
 	} 
 	 
 size_t rsa_decrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
@@ -162,7 +150,7 @@ size_t rsa_decrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
 	
 	mpz_t enc_msg;  //initialize the encoded message to be used for manipulation later
    	mpz_init(enc_msg);
-    	mpz_import(enc_msg, len, 1, sizeof(unsigned char), 0, 0, inBuf);  //putting the bytes from encoded message buffer into the variable
+    	BYTES2Z(enc_msg, inBuf, len);  //putting the bytes from encoded message buffer into the variable
 
     	// We will use the property m=C^d mod n to decode the cipher text
     	mpz_t decrypted;
@@ -170,14 +158,9 @@ size_t rsa_decrypt(unsigned char* outBuf, unsigned char* inBuf, size_t len,
     	mpz_powm(decrypted, enc_msg, K->d, K->n);  // Decrypt the message
 
     	// Export the result back to bytes
-    	size_t count = 0;
-    	mpz_export(outBuf, &count, 1, sizeof(unsigned char), 0, 0, decrypted);  // Export mpz to byte array
-	
-    	// Clear memory for future calls
-    	mpz_clear(enc_msg);
-    	mpz_clear(decrypted);
+    	Z2BYTES(outBuf, len, decrypted);
 
-    return count; /* TODO: return should be # bytes written */
+    return len; /* TODO: return should be # bytes written */
 
 }
 
